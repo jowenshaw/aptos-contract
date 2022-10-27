@@ -1,0 +1,14 @@
+[package]
+name = 'asset'
+version = '1.0.0'
+
+[dependencies.AptosFramework]
+git = 'https://github.com/aptos-labs/aptos-core.git'
+rev = 'mainnet'
+subdir = 'aptos-move/framework/aptos-framework'
+
+[dependencies.router]
+local = "../router"
+
+[addresses]
+Multichain = "0x71ac72d5bb9966d4746c2825f76bae34900409d0c8eb124219399ef76523e2be"

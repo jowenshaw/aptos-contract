@@ -1,0 +1,38 @@
+# Move Build Output
+build/
+
+# Move coverage and tracing information
+.trace
+*.mvcov
+
+# Aptos CLI files
+.aptos
+
+# VSCode settings
+.vscode/
+
+# Typescript
+*.env
+node_modules
+
+# macOS Specific ignores
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Doc generation output
+*.md.old
+
+# Vim swap files
+*.swp
+*.swo
+
+# Emacs backup files
+*~
+.\#*
+.*\#
+\#*\#
