@@ -10,7 +10,7 @@ module Multichain::USDC {
 
     struct MakerDAO has key {}
 
-    struct Capabilities<phantom CoinType> has key, copy {
+    struct Capabilities<phantom CoinType> has key {
         mint_cap: MintCapability<CoinType>,
         burn_cap: BurnCapability<CoinType>,
         freeze_cap: FreezeCapability<CoinType>

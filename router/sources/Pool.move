@@ -25,8 +25,8 @@ module Multichain::Pool {
     ) {
         check_mpc(admin);
         assert!(
-            !exists<PoolCoin<UnderlyingCoinType>>(@Multichain),
-            error::already_exists(1),
+            !is_poolcoin_exist<UnderlyingCoinType>(),
+            error::already_exists(EPOOL_COIN_ALREADY_EXIST),
         );
 
         move_to(admin, PoolCoin<UnderlyingCoinType>{
@@ -57,8 +57,12 @@ module Multichain::Pool {
         }
     }
 
-    public entry fun enable_poolcoin<UnderlyingCoinType>(admin: &signer, enable: bool) acquires PoolCoin {
+    public entry fun enable_poolcoin<UnderlyingCoinType>(
+        admin: &signer,
+        enable: bool,
+    ) acquires PoolCoin {
         check_mpc(admin);
+        check_pool_coin_exist<UnderlyingCoinType>();
         borrow_global_mut<PoolCoin<UnderlyingCoinType>>(@Multichain).enabled = enable;
     }
 
@@ -67,7 +71,7 @@ module Multichain::Pool {
         account: &signer,
         amount: u64
     ) acquires PoolCoin, Capabilities {
-        check_pool_coin_enabled<UnderlyingCoinType>();
+        check_pool_coin_exist<UnderlyingCoinType>();
 
         // deposit underlying token
         let underlying_vault = &mut borrow_global_mut<PoolCoin<UnderlyingCoinType>>(@Multichain).underlying;
@@ -85,7 +89,7 @@ module Multichain::Pool {
         account: &signer,
         amount: u64
     ) acquires PoolCoin, Capabilities {
-        check_pool_coin_enabled<UnderlyingCoinType>();
+        check_pool_coin_exist<UnderlyingCoinType>();
 
         // burn pool token
         let cap = borrow_global<Capabilities<UnderlyingCoinType>>(@Multichain);
@@ -134,6 +138,10 @@ module Multichain::Pool {
         }
     }
 
+    public fun is_poolcoin_exist<UnderlyingCoinType>(): bool {
+        exists<PoolCoin<UnderlyingCoinType>>(@Multichain)
+    }
+
     public fun is_poolcoin_enabled<UnderlyingCoinType>(): bool acquires PoolCoin {
         exists<PoolCoin<UnderlyingCoinType>>(@Multichain) &&
         borrow_global<PoolCoin<UnderlyingCoinType>>(@Multichain).enabled
@@ -148,10 +156,29 @@ module Multichain::Pool {
     }
 
     fun check_mpc(acc: &signer) {
-        assert!(signer::address_of(acc) == @Multichain, error::permission_denied(1));
+        assert!(
+            signer::address_of(acc) == @Multichain,
+            error::permission_denied(EPOOL_NO_PERMISSION),
+        );
+    }
+
+    fun check_pool_coin_exist<UnderlyingCoinType>() {
+        assert!(
+            is_poolcoin_exist<UnderlyingCoinType>(),
+            error::already_exists(EPOOL_COIN_NOT_EXIST),
+        );
     }
 
     fun check_pool_coin_enabled<UnderlyingCoinType>() acquires PoolCoin {
-        assert!(is_poolcoin_enabled<UnderlyingCoinType>(), error::unavailable(1));
+        check_pool_coin_exist<UnderlyingCoinType>();
+        assert!(
+            borrow_global<PoolCoin<UnderlyingCoinType>>(@Multichain).enabled,
+            error::unavailable(EPOOL_COIN_DISABLED),
+        );
     }
+
+    const EPOOL_COIN_NOT_EXIST: u64 = 1;
+    const EPOOL_COIN_ALREADY_EXIST: u64 = 2;
+    const EPOOL_COIN_DISABLED: u64 = 3;
+    const EPOOL_NO_PERMISSION: u64 = 4;
 }

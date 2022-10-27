@@ -8,12 +8,10 @@ module Multichain::Router {
     use aptos_std::event::{Self, EventHandle};
     use Multichain::Pool;
 
-    struct RouterMintCap<phantom CoinType> has key {
-        cap: MintCapability<CoinType>
-    }
-
-    struct RouterBurnCap<phantom CoinType> has key {
-        cap: BurnCapability<CoinType>
+    struct Capabilities<phantom CoinType> has key {
+        mint_cap: MintCapability<CoinType>,
+        burn_cap: BurnCapability<CoinType>,
+        enabled: bool
     }
 
     struct SwapOutEventHolder has key {
@@ -61,21 +59,33 @@ module Multichain::Router {
         borrow_global_mut<Status>(@Multichain).paused = paused;
     }
 
+    public entry fun enable_capability<CoinType>(
+        admin: &signer,
+        enable: bool,
+    ) acquires Capabilities {
+        check_mpc(admin);
+        assert!(
+            exists<Capabilities<CoinType>>(@Multichain),
+            error::unavailable(EROUTER_CAPABILITY_NOT_EXIST),
+        );
+        borrow_global_mut<Capabilities<CoinType>>(@Multichain).enabled = enable;
+    }
+
     public entry fun swapout<CoinType>(
         account: &signer,
         amount: u64,
         receiver: String,
         to_chain_id: u64
-    ) acquires Status, RouterBurnCap, SwapOutEventHolder {
+    ) acquires Status, Capabilities, SwapOutEventHolder {
         check_status();
 
         if (Pool::is_poolcoin_enabled<CoinType>()) {
             Pool::swapout<CoinType>(account, amount);
         } else {
-            check_burn_cap<CoinType>();
-            let burn_cap = borrow_global<RouterBurnCap<CoinType>>(@Multichain);
+            check_capabilities<CoinType>();
+            let cap = borrow_global<Capabilities<CoinType>>(@Multichain);
             let coin_to_burn = coin::withdraw<CoinType>(account, amount);
-            coin::burn<CoinType>(coin_to_burn, &burn_cap.cap);
+            coin::burn<CoinType>(coin_to_burn, &cap.burn_cap);
         };
 
         let event_holder = borrow_global_mut<SwapOutEventHolder>(@Multichain);
@@ -94,16 +104,16 @@ module Multichain::Router {
         amount: u64,
         swapid: String,
         from_chain_id: u64
-    ) acquires Status, RouterMintCap, SwapInEventHolder {
+    ) acquires Status, Capabilities, SwapInEventHolder {
         check_status();
         check_mpc(mpc);
 
         if (Pool::is_poolcoin_enabled<CoinType>()) {
             Pool::swapin<CoinType>(mpc, receiver, amount);
         } else {
-            check_mint_cap<CoinType>();
-            let mint_cap = borrow_global<RouterMintCap<CoinType>>(@Multichain);
-            let coins_minted = coin::mint<CoinType>(amount, &mint_cap.cap);
+            check_capabilities<CoinType>();
+            let cap = borrow_global<Capabilities<CoinType>>(@Multichain);
+            let coins_minted = coin::mint<CoinType>(amount, &cap.mint_cap);
             coin::deposit<CoinType>(receiver, coins_minted);
         };
 
@@ -124,23 +134,37 @@ module Multichain::Router {
         burn_cap: BurnCapability<CoinType>
     ) {
         check_mpc(admin);
-        move_to(admin, RouterMintCap<CoinType> { cap: mint_cap });
-        move_to(admin, RouterBurnCap<CoinType> { cap: burn_cap });
+        let enabled = true;
+        move_to(admin, Capabilities<CoinType>{ mint_cap, burn_cap, enabled });
     }
 
     fun check_mpc(acc: &signer) {
-        assert!(signer::address_of(acc) == @Multichain, error::permission_denied(1));
+        assert!(
+            signer::address_of(acc) == @Multichain,
+            error::permission_denied(EROUTER_NO_PERMISSION),
+        );
     }
 
     fun check_status() acquires Status {
-        assert!(!borrow_global<Status>(@Multichain).paused, error::unavailable(502));
+        assert!(
+            !borrow_global<Status>(@Multichain).paused,
+            error::unavailable(EROUTER_PAUSED),
+        );
     }
 
-    fun check_mint_cap<CoinType>() {
-        assert!(exists<RouterMintCap<CoinType>>(@Multichain), error::unavailable(1));
+    fun check_capabilities<CoinType>() acquires Capabilities {
+        assert!(
+            exists<Capabilities<CoinType>>(@Multichain),
+            error::unavailable(EROUTER_CAPABILITY_NOT_EXIST),
+        );
+        assert!(
+            borrow_global<Capabilities<CoinType>>(@Multichain).enabled,
+            error::unavailable(EROUTER_CAPABILITY_DISABLED),
+        );
     }
 
-    fun check_burn_cap<CoinType>() {
-        assert!(exists<RouterBurnCap<CoinType>>(@Multichain), error::unavailable(2));
-    }
+    const EROUTER_PAUSED: u64 = 1;
+    const EROUTER_CAPABILITY_NOT_EXIST: u64 = 2;
+    const EROUTER_CAPABILITY_DISABLED: u64 = 3;
+    const EROUTER_NO_PERMISSION: u64 = 4;
 }
